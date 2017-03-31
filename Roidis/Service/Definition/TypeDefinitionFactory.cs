@@ -80,9 +80,19 @@ namespace Roidis.Service.Definition
                         }
 
                         //find custom field definitions
-                        else if (attr is RoidFieldAttribute fieldAttribute)
+                        else if (attr is RoidFieldNameAttribute nameAttribute)
                         {
-                            memberName = fieldAttribute.Name;
+                            memberName = nameAttribute.Name;
+                        }
+
+                        //find ignored field definitions
+                        else if (attr is RoidIgnoreAttribute ignoreAttribute)
+                        {
+                            if (ignoreAttribute.OnCreate)
+                                definition.IgnoreOnCreateFields.Add(member);
+
+                            if (ignoreAttribute.OnUpdate)
+                                definition.IgnoreOnUpdateFields.Add(member);
                         }
                     }
                 }

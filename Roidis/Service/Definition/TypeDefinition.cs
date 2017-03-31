@@ -28,7 +28,13 @@ namespace Roidis.Service.Definition
         
         private readonly List<Member> _requiredfields = new List<Member>();
         public List<Member> RequiredFields => _requiredfields;
-        
+
+        private readonly List<Member> _ignoreOnCreateFields = new List<Member>();
+        public List<Member> IgnoreOnCreateFields => _ignoreOnCreateFields;
+
+        private readonly List<Member> _ignoreOnUpdateFields = new List<Member>();
+        public List<Member> IgnoreOnUpdateFields => _ignoreOnUpdateFields;
+
         internal readonly Dictionary<string, string> MemberToStorageNameMap = new Dictionary<string, string>();
         internal readonly Dictionary<string, string> MemberToIndexNameMap = new Dictionary<string, string>();
         private readonly IValueConverter _valueConverter;

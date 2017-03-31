@@ -17,16 +17,20 @@ namespace Roidis.Service.Mapper
             _redisValueConverter = converter;
         }
 
-        public List<HashEntry> HashFor<T>(ITypeDefinition<T> definition, T instance) where T : new()
+        public List<HashEntry> HashFor<T>(ITypeDefinition<T> definition, T instance, bool isNew, HashEntry[] existingRecord)
         {
             var list = new List<HashEntry>();
 
             foreach (var field in definition.AllFields)
             {
+                if (isNew && definition.IgnoreOnCreateFields.Any(f => f.Name == field.Name)) continue;
+                else if (!isNew && definition.IgnoreOnUpdateFields.Any(f => f.Name == field.Name)) continue;
+
                 var value = definition.Accessor[instance, field.Name];
                 var redisValue = _redisValueConverter.FromObject(value, field.Type);
 
-                list.Add(new HashEntry(definition.GetHashName(field), redisValue));
+                if (redisValue != existingRecord.FirstOrDefault(h => h.Name == field.Name).Value)
+                    list.Add(new HashEntry(definition.GetHashName(field), redisValue));
             }
 
             return list;

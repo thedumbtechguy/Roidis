@@ -40,6 +40,16 @@ namespace Roidis.Service.Definition
         List<Member> RequiredFields { get; }
 
         /// <summary>
+        /// Fields to ignore when creating a new record
+        /// </summary>
+        List<Member> IgnoreOnCreateFields { get; }
+
+        /// <summary>
+        /// Fields to ignore when updating an existing record
+        /// </summary>
+        List<Member> IgnoreOnUpdateFields { get; }
+
+        /// <summary>
         /// An object that can be used to set and retrieve values of a given instance
         /// </summary>
         TypeAccessor Accessor { get; }

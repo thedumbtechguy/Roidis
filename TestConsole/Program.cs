@@ -34,18 +34,39 @@ namespace TestConsole
 
             var key = "";
 
-            var proxy = roid.From<TestObject>();
+            var proxy = roid.From<MyObject>();
 
             while (key != "C")
             {
-                //    var x = new TestObject()
-                //    {
-                //        Id = key,
-                //        StringProp = key
-                //    };
-                //    proxy.Save(x).Wait();
-                //    x = proxy.Fetch(key).Result;
+                Console.WriteLine("Enter your name: ");
+                var name = Console.ReadLine();
 
+                Console.WriteLine("Enter your gender: ");
+                var gender = Console.ReadLine();
+
+                Console.WriteLine("Enter your password: ");
+                var sensitive = Console.ReadLine();
+
+
+                var x = new MyObject()
+                {
+                    Id = "",
+                    Name = name,
+                    Sex = gender,
+                    Sensitive = sensitive
+                };
+                x = proxy.Save(x).Result;
+                proxy.Increment(x.Id, a => a.Age, new Random().Next(10)).Wait();
+                proxy.Decrement(x.Id, a => a.Age, new Random().Next(10)).Wait();
+
+                x = proxy.Fetch(key).Result;
+
+
+                Console.WriteLine($"Total Count: {proxy.CountAll().Result}");
+                Console.WriteLine($"Total Males: {proxy.CountAllWhere(a => a.Sex == "male").Result}");
+                Console.WriteLine($"Total Females: {proxy.CountAllWhere(a => a.Sex == "female").Result}");
+
+                #region collapsed
                 //proxy.FetchAll().Subscribe(item => Console.WriteLine(item.Id));
                 //proxy.FetchAllWhere(a => a.IntProp != 0).Subscribe(item => Console.WriteLine(item.Id));
 
@@ -79,13 +100,52 @@ namespace TestConsole
                 //Console.WriteLine(proxy.FetchAllWhere(a => a.Enum1 == Enum1.Enum1Value1 && a.DateTimeOffsetProp == DateTimeOffset.Now));
                 //Console.WriteLine(proxy.FetchAllWhere(a => a.ByteArrayProp == new byte[0]));
                 //Console.WriteLine(proxy.FetchAllWhere(a => a.ByteArrayProp == new byte[0] || a.GuidProp == Guid.Empty));
-
+                #endregion
 
                 key = Console.ReadKey().Key.ToString();
                 Console.WriteLine(key);
             }
 
+
+            Console.WriteLine("=============");
+            Console.WriteLine("");
+
+            Console.WriteLine("All Ids: ");
+            proxy.FetchAll().Subscribe(item => Console.Write(item.Id));
+            Console.WriteLine(".");
+
+            Console.WriteLine("Male Ids: ");
+            proxy.FetchAllWhere(a => a.Sex == "male").Subscribe(item => Console.Write(item.Id));
+            Console.WriteLine(".");
+
+            Console.WriteLine("Female Ids: ");
+            proxy.FetchAllWhere(a => a.Sex == "female").Subscribe(item => Console.Write(item.Id));
+            Console.WriteLine(".");
+            Console.WriteLine("=============");
+
+
+            //proxy.FetchAllWhere(a => a.IntProp != 0).Subscribe(item => Console.WriteLine(item.Id));
+
             Console.WriteLine("Exiting...");
+            Console.ReadLine();
+        }
+
+        [RoidPrefix("Database")]
+        public class MyObject
+        {
+            [RoidKey]
+            public string Id { get; set; }
+
+            public string Name { get; set; }
+            
+            public int Age { get; set; }
+
+            [RoidIndex]
+            [RoidFieldName("Gender")]
+            public string Sex { get; set; }
+            
+            [RoidIgnore(OnUpdate:true)]
+            public string Sensitive { get; set; }
         }
 
         [RoidPrefix("CustomPrefix")]
@@ -142,7 +202,7 @@ namespace TestConsole
             [RoidRequired]
             public int RequiredField { get; set; }
 
-            [RoidField("CustomFieldName")]
+            [RoidFieldName("CustomFieldName")]
             public int CustomField { get; set; }
 
         }

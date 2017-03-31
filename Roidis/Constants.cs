@@ -6,7 +6,8 @@ namespace Roidis
 {
     internal static class Constants
     {
-        public const string RoidHashFieldIndexes = "__indexes";
-        public const string Separator = "<#_roid_#>";
+        public const string InternalPrefix = "<#roid:";
+        public const string RoidHashFieldIndexes = "<#roid:indexes#>";
+        public const string Separator = "<#roid:sep#>";
     }
 }

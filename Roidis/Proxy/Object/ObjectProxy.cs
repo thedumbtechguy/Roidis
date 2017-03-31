@@ -25,8 +25,9 @@ namespace Roidis.Proxy.Object
         private readonly IHashMapper _mapper;
         private readonly ITypeIndexer _indexer;
         private readonly ITypeDefinition<T> _typeDefinition;
+        private readonly IExpressionParser _parser;
 
-        public ObjectProxy(ITypeDefinition<T> typeDefinition, IDatabase database, IValueConverter valueConverter, IStorageKeyGenerator storageKeyGenerator, IHashMapper hashMapper, ITypeIndexer typeIndexer)
+        public ObjectProxy(ITypeDefinition<T> typeDefinition, IDatabase database, IValueConverter valueConverter, IStorageKeyGenerator storageKeyGenerator, IHashMapper hashMapper, ITypeIndexer typeIndexer, IExpressionParser parser)
         {
             _database = database;
 
@@ -35,9 +36,11 @@ namespace Roidis.Proxy.Object
             _mapper = hashMapper;
             _indexer = typeIndexer;
             _typeDefinition = typeDefinition;
+            _parser = parser;
         }
 
-        public async Task<T> Save(T instance)
+
+        public async Task<T> Save(T instance, bool saveChangedOnly = true)
         {
             var serialKey = _storageKeyGenerator.GetSerialKey(_typeDefinition);
             var clusterIndexKey = _storageKeyGenerator.GetClusteredIndexKey(_typeDefinition);
@@ -48,6 +51,7 @@ namespace Roidis.Proxy.Object
 
             RedisKey key;
             var existingIndexes = new RedisKey[0];
+            var existingRecord = new HashEntry[0];
             long serial = -1;
             if (!wasIdSet)
             {
@@ -63,24 +67,38 @@ namespace Roidis.Proxy.Object
             }
             else
             {
+                string rawIndexes = null;
                 key = _storageKeyGenerator.GetKey(_typeDefinition, id);
 
-                var rawIndexes = (string)await _database.HashGetAsync(key, Constants.RoidHashFieldIndexes).ConfigureAwait(false);
+                if (saveChangedOnly)
+                {
+                    existingRecord = await _database.HashGetAllAsync(key).ConfigureAwait(false);
+                    rawIndexes = existingRecord.FirstOrDefault(h => h.Name == Constants.RoidHashFieldIndexes).Value;
+                }
+                else
+                {
+                    rawIndexes = await _database.HashGetAsync(key, Constants.RoidHashFieldIndexes).ConfigureAwait(false);
+                }
 
                 // if rawIndexes is null, that means we have not yet saved the object
                 // id is user provided in this case hence we need to add it to the clustered index
-                if (rawIndexes == null)
+                if (string.IsNullOrWhiteSpace(rawIndexes))
+                {
                     serial = await _database.StringIncrementAsync(serialKey).ConfigureAwait(false);
+                }
                 else
+                {
                     existingIndexes = rawIndexes.Split(new[] { Constants.Separator }, StringSplitOptions.RemoveEmptyEntries)
                                         .Select(i => (RedisKey)i)
                                         .ToArray();
+                }
             }
 
-            var hash = _mapper.HashFor(_typeDefinition, instance);
+
+            bool isNew = serial != -1;
+            var hash = _mapper.HashFor(_typeDefinition, instance, isNew, existingRecord);
 
             var indexes = _indexer.GetIndexes(_typeDefinition, hash);
-
             var indexesToRemove = existingIndexes.Where(i => !indexes.Contains(i)).ToArray();
             var indexesToAdd = indexes.Where(i => !existingIndexes.Contains(i)).ToArray();
 
@@ -89,12 +107,11 @@ namespace Roidis.Proxy.Object
             var keyString = (string)key;
             var txn = _database.CreateTransaction();
 
-
 #pragma warning disable CS4014
 
             txn.HashSetAsync(key, hash.ToArray());
 
-            if (serial != -1)
+            if (isNew)
                 txn.SortedSetAddAsync(clusterIndexKey, new[] { new SortedSetEntry(keyString, serial) });
 
             foreach (var index in indexesToAdd) txn.SetAddAsync(index, keyString);
@@ -113,13 +130,32 @@ namespace Roidis.Proxy.Object
             return instance;
         }
 
-
         public async Task<T> Fetch(RedisValue id)
         {
             var key = _storageKeyGenerator.GetKey(_typeDefinition, id);
 
             return await FetchInternal(key);
         }
+
+
+        public async Task<long> Increment<TProperty>(RedisValue id, Expression<Func<T, TProperty>> expression, long incrementBy = 1)
+        {
+            var key = _storageKeyGenerator.GetKey(_typeDefinition, id);
+
+            var propertyName = _parser.GetPropertyName(expression);
+
+            return await _database.HashIncrementAsync(key, propertyName, incrementBy);
+        }
+
+        public async Task<long> Decrement<TProperty>(RedisValue id, Expression<Func<T, TProperty>> expression, long decrementBy = 1)
+        {
+            var key = _storageKeyGenerator.GetKey(_typeDefinition, id);
+
+            var propertyName = _parser.GetPropertyName(expression);
+
+            return await _database.HashDecrementAsync(key, propertyName, decrementBy);
+        }
+
 
         public IObservable<T> FetchAll()
         {
@@ -133,31 +169,18 @@ namespace Roidis.Proxy.Object
                 });
         }
 
-
         public IObservable<T> FetchAllWhere(Expression<Func<T, bool>> filter)
         {
-            var parser = new ExpressionParser();
-            var tree = parser.ParseFilter(filter);
+            Tuple<SetOperation, RedisKey[]> result = ParseFilter(filter);
 
-            RedisKey[] indexes;
-            SetOperation operation;
-            if (tree is UnaryFilterExpression unary)
-            {
-                indexes = new RedisKey[] { FilterToKey(unary.Filter) };
-                operation = SetOperation.Difference;//difference isn't used
-            }
-            else if (tree is BinaryFilterExpression binary)
-            {
-                indexes = new RedisKey[] { FilterToKey(binary.Left), FilterToKey(binary.Right) };
-                operation = binary.Comparison == ComparisonOperator.And ? SetOperation.Intersect : SetOperation.Union;
-            }
-            else throw new InvalidFilterExpression($"Filter is invalid '{filter}'.");
+            var operation = result.Item1;
+            var indexes = result.Item2;
 
             return Observable.Create<T>(
                 async obs =>
                 {
                     RedisValue[] keys;
-                    if(indexes.Length == 1)
+                    if (indexes.Length == 1)
                         keys = await _database.SetMembersAsync(indexes[0]).ConfigureAwait(false);
                     else
                         keys = await _database.SetCombineAsync(operation, indexes[0], indexes[1]).ConfigureAwait(false);
@@ -165,33 +188,27 @@ namespace Roidis.Proxy.Object
                     await FetchAllInternal(keys, obs);
                 });
         }
+   
 
-        private RedisKey FilterToKey(Filter filter)
+        public async Task<long> CountAll()
         {
-            var member = _typeDefinition.IndexedFields.Where(f => f.Name == filter.OperandName).FirstOrDefault();
-            if (member == null) throw new InvalidFilterExpression($"{filter.OperandName} is not indexed");
-
-            RedisValue value;
-
-            if (member.Type.GetTypeInfo().IsEnum)
-            {
-                value = _valueConverter.FromObject(Enum.ToObject(member.Type, (int)filter.RightValue), member.Type);
-            }
-            else
-            {
-                value = _valueConverter.FromObject(filter.RightValue, member.Type);
-            }
-
-            if(filter.Operator == FilterOperator.NotEquals)
-            {
-                if(member.Type != typeof(bool))
-                    throw new InvalidFilterExpression($"The 'Not Equals' operation is only supported on booleans.");
-
-                value = !(bool)value;
-            }
-
-            return _storageKeyGenerator.GetFieldIndexKey(_typeDefinition, member, value);
+            var clusterIndex = _storageKeyGenerator.GetClusteredIndexKey(_typeDefinition);
+            return await _database.SortedSetLengthAsync(clusterIndex).ConfigureAwait(false);
         }
+
+        public async Task<long> CountAllWhere(Expression<Func<T, bool>> filter)
+        {
+            Tuple<SetOperation, RedisKey[]> result = ParseFilter(filter);
+
+            var operation = result.Item1;
+            var indexes = result.Item2;
+
+            if (indexes.Length == 1)
+                return await _database.SetLengthAsync(indexes[0]).ConfigureAwait(false);
+            else
+                return (await _database.SetCombineAsync(operation, indexes[0], indexes[1]).ConfigureAwait(false)).LongCount();
+        }
+
 
         #region collapsed
         //private SetOperation ParseFilterExpression(Expression expression, List<RedisKey> indexes, int logicDepth, RedisValue propVal, Type propType, SetOperation operation)
@@ -209,7 +226,7 @@ namespace Roidis.Proxy.Object
 
         //        var member = _typeDefinition.IndexedFields.Where(f => f.Name == property.Member.Name).FirstOrDefault();
         //        if (member == null) throw new InvalidFilterExpression($"{property.Member.Name} is not indexed");
-                
+
         //        var indexKey = _storageKeyGenerator.GetFieldIndexKey(_typeDefinition, member, propVal);
         //        indexes.Add(indexKey);
 
@@ -232,7 +249,7 @@ namespace Roidis.Proxy.Object
         //        }
         //        else if (unary.NodeType == ExpressionType.Not)
         //            return ParseFilterExpression(unary.Operand, indexes, logicDepth, false, typeof(bool), operation);
-               
+
         //        throw new InvalidFilterExpression($"Only '!Boolean' and enum unary expressions are supported: '{expression}'.");
         //    }
         //    else if(expression is BinaryExpression comparison)
@@ -282,7 +299,7 @@ namespace Roidis.Proxy.Object
         //        {
         //            throw new InvalidFilterExpression($"Unsupported operation: '{comparison.NodeType}'.");
         //        }
-                
+
 
         //        switch (comparison.NodeType)
         //        {
@@ -344,7 +361,56 @@ namespace Roidis.Proxy.Object
 
         #endregion
 
+
         #region internals
+
+        private Tuple<SetOperation, RedisKey[]> ParseFilter(Expression<Func<T, bool>> filter)
+        {
+            var tree = _parser.ParseFilter(filter);
+
+            RedisKey[] indexes;
+            SetOperation operation;
+            if (tree is UnaryFilterExpression unary)
+            {
+                indexes = new RedisKey[] { FilterToKey(unary.Filter) };
+                operation = SetOperation.Difference;//difference isn't used
+            }
+            else if (tree is BinaryFilterExpression binary)
+            {
+                indexes = new RedisKey[] { FilterToKey(binary.Left), FilterToKey(binary.Right) };
+                operation = binary.Comparison == ComparisonOperator.And ? SetOperation.Intersect : SetOperation.Union;
+            }
+            else throw new InvalidFilterExpression($"Filter is invalid '{filter}'.");
+
+            return Tuple.Create(operation, indexes);
+        }
+
+        private RedisKey FilterToKey(Filter filter)
+        {
+            var member = _typeDefinition.IndexedFields.Where(f => f.Name == filter.OperandName).FirstOrDefault();
+            if (member == null) throw new InvalidFilterExpression($"{filter.OperandName} is not indexed");
+
+            RedisValue value;
+
+            if (member.Type.GetTypeInfo().IsEnum)
+            {
+                value = _valueConverter.FromObject(Enum.ToObject(member.Type, (int)filter.RightValue), member.Type);
+            }
+            else
+            {
+                value = _valueConverter.FromObject(filter.RightValue, member.Type);
+            }
+
+            if (filter.Operator == FilterOperator.NotEquals)
+            {
+                if (member.Type != typeof(bool))
+                    throw new InvalidFilterExpression($"The 'Not Equals' operation is only supported on booleans.");
+
+                value = !(bool)value;
+            }
+
+            return _storageKeyGenerator.GetFieldIndexKey(_typeDefinition, member, value);
+        }
 
         private async Task FetchAllInternal(RedisValue[] keys, IObserver<T> obs)
         {
