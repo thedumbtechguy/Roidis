@@ -136,6 +136,7 @@ namespace TestConsole
             [RoidKey]
             public string Id { get; set; }
 
+            [RoidRequired]
             public string Name { get; set; }
             
             public int Age { get; set; }
@@ -144,7 +145,7 @@ namespace TestConsole
             [RoidFieldName("Gender")]
             public string Sex { get; set; }
             
-            [RoidIgnore(OnUpdate:true)]
+            [RoidIgnore(OnCreate:false)]
             public string Sensitive { get; set; }
         }
 

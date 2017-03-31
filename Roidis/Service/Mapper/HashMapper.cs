@@ -1,4 +1,5 @@
-﻿using Roidis.Service.Converter;
+﻿using Roidis.Exception;
+using Roidis.Service.Converter;
 using Roidis.Service.Definition;
 using StackExchange.Redis;
 using System;
@@ -28,6 +29,9 @@ namespace Roidis.Service.Mapper
 
                 var value = definition.Accessor[instance, field.Name];
                 var redisValue = _redisValueConverter.FromObject(value, field.Type);
+
+                if (definition.RequiredFields.Any(f => f.Name == field.Name) && !redisValue.HasValue)
+                    throw new MemberRequiredException(field);
 
                 if (redisValue != existingRecord.FirstOrDefault(h => h.Name == field.Name).Value)
                     list.Add(new HashEntry(definition.GetHashName(field), redisValue));
