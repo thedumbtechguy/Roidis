@@ -13,6 +13,7 @@ using System;
 using System.Reactive.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using Roidis.Service.Parser;
 
 namespace Roidis.Proxy.Object
 {
@@ -133,19 +134,30 @@ namespace Roidis.Proxy.Object
         }
 
 
-        public IObservable<T> FetchAllWhere<TProperty>(Expression<Func<T, TProperty>> filter)
+        public IObservable<T> FetchAllWhere(Expression<Func<T, bool>> filter)
         {
-            var indexes = new List<RedisKey>();
-            var operation = ParseFilterExpression(filter.Body, indexes, 1, true, typeof(bool), SetOperation.Difference);
+            var parser = new ExpressionParser();
+            var tree = parser.ParseFilter(filter);
 
-            if(!indexes.Any())
-                throw new InvalidFilterExpression($"Filter is invalid '{filter}'.");
+            RedisKey[] indexes;
+            SetOperation operation;
+            if (tree is UnaryFilterExpression unary)
+            {
+                indexes = new RedisKey[] { FilterToKey(unary.Filter) };
+                operation = SetOperation.Difference;//difference isn't used
+            }
+            else if (tree is BinaryFilterExpression binary)
+            {
+                indexes = new RedisKey[] { FilterToKey(binary.Left), FilterToKey(binary.Right) };
+                operation = binary.Comparison == ComparisonOperator.And ? SetOperation.Intersect : SetOperation.Union;
+            }
+            else throw new InvalidFilterExpression($"Filter is invalid '{filter}'.");
 
             return Observable.Create<T>(
                 async obs =>
                 {
                     RedisValue[] keys;
-                    if(indexes.Count == 1)
+                    if(indexes.Length == 1)
                         keys = await _database.SetMembersAsync(indexes[0]).ConfigureAwait(false);
                     else
                         keys = await _database.SetCombineAsync(operation, indexes[0], indexes[1]).ConfigureAwait(false);
@@ -154,125 +166,153 @@ namespace Roidis.Proxy.Object
                 });
         }
 
-        private SetOperation ParseFilterExpression(Expression expression, List<RedisKey> indexes, int logicDepth, RedisValue propVal, Type propType, SetOperation operation)
+        private RedisKey FilterToKey(Filter filter)
         {
-            if(logicDepth > 2)
+            var member = _typeDefinition.IndexedFields.Where(f => f.Name == filter.OperandName).FirstOrDefault();
+            if (member == null) throw new InvalidFilterExpression($"{filter.OperandName} is not indexed");
+
+            RedisValue value;
+
+            if (member.Type.GetTypeInfo().IsEnum)
             {
-                Console.WriteLine($"Current depth: {logicDepth}");
-                throw new InvalidFilterExpression("You can only combine two expressions in a filter.");
-            }
-
-            if (expression is MemberExpression property)
-            {
-                if (propType == typeof(bool) && (property.Type != typeof(bool) && property.Type != typeof(bool?)))
-                    throw new InvalidFilterExpression($"Non boolean property expressions are not supported: '{expression}'.");
-
-                var member = _typeDefinition.IndexedFields.Where(f => f.Name == property.Member.Name).FirstOrDefault();
-                if (member == null) throw new InvalidFilterExpression($"{property.Member.Name} is not indexed");
-                
-                var indexKey = _storageKeyGenerator.GetFieldIndexKey(_typeDefinition, member, propVal);
-                indexes.Add(indexKey);
-
-                return operation;
-            }
-            else if (expression is UnaryExpression unary)
-            {
-                if (propType == typeof(int) && unary.NodeType == ExpressionType.Convert)
-                {
-                    property = unary.Operand as MemberExpression;
-
-                    var member = _typeDefinition.IndexedFields.Where(f => f.Name == property.Member.Name).FirstOrDefault();
-                    if (member == null) throw new InvalidFilterExpression($"{property.Member.Name} is not indexed");
-
-                    propVal = _valueConverter.FromObject(Enum.ToObject(member.Type, (int) propVal), member.Type);
-                    var indexKey = _storageKeyGenerator.GetFieldIndexKey(_typeDefinition, member, propVal);
-                    indexes.Add(indexKey);
-
-                    return operation;
-                }
-                else if (unary.NodeType == ExpressionType.Not)
-                    return ParseFilterExpression(unary.Operand, indexes, logicDepth, false, typeof(bool), operation);
-               
-                throw new InvalidFilterExpression($"Only '!Boolean' and enum unary expressions are supported: '{expression}'.");
-            }
-            else if(expression is BinaryExpression comparison)
-            {
-                if (comparison.NodeType == ExpressionType.Equal)
-                {
-                    propType = comparison.Right.Type;
-
-                    object value = Expression.Lambda(comparison.Right).Compile().DynamicInvoke();
-                    propVal = _valueConverter.FromObject(value, propType);
-
-                    return ParseFilterExpression(comparison.Left, indexes, logicDepth, propVal, propType, operation);
-                }
-                else if (comparison.NodeType == ExpressionType.NotEqual)
-                {
-                    if (comparison.Left.Type != typeof(bool))
-                        throw new InvalidFilterExpression($"Filter expression operator '{comparison.NodeType}' is only supported on booleans.");
-
-                    if (comparison.Right is ConstantExpression constant)
-                    {
-                        return ParseFilterExpression(comparison.Left, indexes, logicDepth, !(bool)constant.Value, typeof(bool), operation);
-                    }
-
-                    throw new InvalidFilterExpression($"Unsupported expression: '{expression}'.");
-                }
-                else if (comparison.Right is MemberExpression || comparison.Right is UnaryExpression)
-                {
-                    ParseFilterExpression(comparison.Right, indexes, logicDepth + 1, true, typeof(bool), operation);
-                }
-                else if (comparison.Right is BinaryExpression)
-                {
-                    switch (comparison.NodeType)
-                    {
-                        case ExpressionType.AndAlso:
-                            operation = SetOperation.Intersect;
-                            break;
-                        case ExpressionType.OrElse:
-                            operation = SetOperation.Union;
-                            break;
-                        default:
-                            throw new InvalidFilterExpression($"Filter expression operator '{comparison.NodeType}' is not supported.");
-                    }
-
-                    ParseFilterExpression(comparison.Right, indexes, logicDepth + 1, true, typeof(bool), operation);
-                }
-                else
-                {
-                    throw new InvalidFilterExpression($"Unsupported operation: '{comparison.NodeType}'.");
-                }
-                
-
-                switch (comparison.NodeType)
-                {
-                    case ExpressionType.AndAlso:
-                        operation = SetOperation.Intersect;
-                        break;
-                    case ExpressionType.OrElse:
-                        operation = SetOperation.Union;
-                        break;
-                    default:
-                        throw new InvalidFilterExpression($"Filter expression operator '{comparison.NodeType}' is not supported.");
-                }
-
-                if (comparison.Left is MemberExpression || comparison.Left is UnaryExpression)
-                {
-                    return ParseFilterExpression(comparison.Left, indexes, logicDepth + 1, true, typeof(bool), operation);
-                }
-                else if (comparison.Left is BinaryExpression)
-                {
-                    return ParseFilterExpression(comparison.Left, indexes, logicDepth + 1, true, typeof(bool), operation);
-                }
-
-                throw new InvalidFilterExpression($"Unsupported expression: '{expression}'.");
+                value = _valueConverter.FromObject(Enum.ToObject(member.Type, (int)filter.RightValue), member.Type);
             }
             else
             {
-                throw new InvalidFilterExpression($"Unsupported expression: '{expression}'.");
+                value = _valueConverter.FromObject(filter.RightValue, member.Type);
             }
+
+            if(filter.Operator == FilterOperator.NotEquals)
+            {
+                if(member.Type != typeof(bool))
+                    throw new InvalidFilterExpression($"The 'Not Equals' operation is only supported on booleans.");
+
+                value = !(bool)value;
+            }
+
+            return _storageKeyGenerator.GetFieldIndexKey(_typeDefinition, member, value);
         }
-        
+
+        #region collapsed
+        //private SetOperation ParseFilterExpression(Expression expression, List<RedisKey> indexes, int logicDepth, RedisValue propVal, Type propType, SetOperation operation)
+        //{
+        //    if(logicDepth > 2)
+        //    {
+        //        Console.WriteLine($"Current depth: {logicDepth}");
+        //        throw new InvalidFilterExpression("You can only combine two expressions in a filter.");
+        //    }
+
+        //    if (expression is MemberExpression property)
+        //    {
+        //        if (propType == typeof(bool) && (property.Type != typeof(bool) && property.Type != typeof(bool?)))
+        //            throw new InvalidFilterExpression($"Non boolean property expressions are not supported: '{expression}'.");
+
+        //        var member = _typeDefinition.IndexedFields.Where(f => f.Name == property.Member.Name).FirstOrDefault();
+        //        if (member == null) throw new InvalidFilterExpression($"{property.Member.Name} is not indexed");
+                
+        //        var indexKey = _storageKeyGenerator.GetFieldIndexKey(_typeDefinition, member, propVal);
+        //        indexes.Add(indexKey);
+
+        //        return operation;
+        //    }
+        //    else if (expression is UnaryExpression unary)
+        //    {
+        //        if (propType == typeof(int) && unary.NodeType == ExpressionType.Convert)
+        //        {
+        //            property = unary.Operand as MemberExpression;
+
+        //            var member = _typeDefinition.IndexedFields.Where(f => f.Name == property.Member.Name).FirstOrDefault();
+        //            if (member == null) throw new InvalidFilterExpression($"{property.Member.Name} is not indexed");
+
+        //            propVal = _valueConverter.FromObject(Enum.ToObject(member.Type, (int) propVal), member.Type);
+        //            var indexKey = _storageKeyGenerator.GetFieldIndexKey(_typeDefinition, member, propVal);
+        //            indexes.Add(indexKey);
+
+        //            return operation;
+        //        }
+        //        else if (unary.NodeType == ExpressionType.Not)
+        //            return ParseFilterExpression(unary.Operand, indexes, logicDepth, false, typeof(bool), operation);
+               
+        //        throw new InvalidFilterExpression($"Only '!Boolean' and enum unary expressions are supported: '{expression}'.");
+        //    }
+        //    else if(expression is BinaryExpression comparison)
+        //    {
+        //        if (comparison.NodeType == ExpressionType.Equal)
+        //        {
+        //            propType = comparison.Right.Type;
+
+        //            object value = Expression.Lambda(comparison.Right).Compile().DynamicInvoke();
+        //            propVal = _valueConverter.FromObject(value, propType);
+
+        //            return ParseFilterExpression(comparison.Left, indexes, logicDepth, propVal, propType, operation);
+        //        }
+        //        else if (comparison.NodeType == ExpressionType.NotEqual)
+        //        {
+        //            if (comparison.Left.Type != typeof(bool))
+        //                throw new InvalidFilterExpression($"Filter expression operator '{comparison.NodeType}' is only supported on booleans.");
+
+        //            if (comparison.Right is ConstantExpression constant)
+        //            {
+        //                return ParseFilterExpression(comparison.Left, indexes, logicDepth, !(bool)constant.Value, typeof(bool), operation);
+        //            }
+
+        //            throw new InvalidFilterExpression($"Unsupported expression: '{expression}'.");
+        //        }
+        //        else if (comparison.Right is MemberExpression || comparison.Right is UnaryExpression)
+        //        {
+        //            ParseFilterExpression(comparison.Right, indexes, logicDepth + 1, true, typeof(bool), operation);
+        //        }
+        //        else if (comparison.Right is BinaryExpression)
+        //        {
+        //            switch (comparison.NodeType)
+        //            {
+        //                case ExpressionType.AndAlso:
+        //                    operation = SetOperation.Intersect;
+        //                    break;
+        //                case ExpressionType.OrElse:
+        //                    operation = SetOperation.Union;
+        //                    break;
+        //                default:
+        //                    throw new InvalidFilterExpression($"Filter expression operator '{comparison.NodeType}' is not supported.");
+        //            }
+
+        //            ParseFilterExpression(comparison.Right, indexes, logicDepth + 1, true, typeof(bool), operation);
+        //        }
+        //        else
+        //        {
+        //            throw new InvalidFilterExpression($"Unsupported operation: '{comparison.NodeType}'.");
+        //        }
+                
+
+        //        switch (comparison.NodeType)
+        //        {
+        //            case ExpressionType.AndAlso:
+        //                operation = SetOperation.Intersect;
+        //                break;
+        //            case ExpressionType.OrElse:
+        //                operation = SetOperation.Union;
+        //                break;
+        //            default:
+        //                throw new InvalidFilterExpression($"Filter expression operator '{comparison.NodeType}' is not supported.");
+        //        }
+
+        //        if (comparison.Left is MemberExpression || comparison.Left is UnaryExpression)
+        //        {
+        //            return ParseFilterExpression(comparison.Left, indexes, logicDepth + 1, true, typeof(bool), operation);
+        //        }
+        //        else if (comparison.Left is BinaryExpression)
+        //        {
+        //            return ParseFilterExpression(comparison.Left, indexes, logicDepth + 1, true, typeof(bool), operation);
+        //        }
+
+        //        throw new InvalidFilterExpression($"Unsupported expression: '{expression}'.");
+        //    }
+        //    else
+        //    {
+        //        throw new InvalidFilterExpression($"Unsupported expression: '{expression}'.");
+        //    }
+        //}
+        #endregion
 
 
         #region fetch variants

@@ -2,6 +2,7 @@
 using Roidis.Attribute;
 using Roidis.Service.Converter;
 using Roidis.Service.KeyGenerator;
+using Roidis.Service.Parser;
 using StackExchange.Redis;
 using System;
 using System.Collections.Generic;
@@ -45,32 +46,39 @@ namespace TestConsole
                 //    proxy.Save(x).Wait();
                 //    x = proxy.Fetch(key).Result;
 
-                //    proxy.FetchAll().Subscribe(item => Console.WriteLine(item.Id));
-                proxy.FetchAllWhere(a => !a.BoolProp && a.GuidProp == Guid.Empty).Subscribe(item => Console.WriteLine(item.Id));
+                //proxy.FetchAll().Subscribe(item => Console.WriteLine(item.Id));
+                //proxy.FetchAllWhere(a => a.IntProp != 0).Subscribe(item => Console.WriteLine(item.Id));
 
-                //proxy.FetchAllWhere(a => !a.BoolProp);
-                //proxy.FetchAllWhere(a => a.BoolProp && a.BoolProp);
-                //proxy.FetchAllWhere(a => a.BoolProp || a.BoolProp);
-                //proxy.FetchAllWhere(a => !a.BoolProp && !a.BoolProp);
-                //proxy.FetchAllWhere(a => !a.BoolProp && a.BoolProp);
-                //proxy.FetchAllWhere(a => !a.BoolProp || !a.BoolProp);
-                //proxy.FetchAllWhere(a => a.BoolProp || !a.BoolProp);
-                //proxy.FetchAllWhere(a => a.BoolProp == true);
-                //proxy.FetchAllWhere(a => a.BoolProp != false);
-                //proxy.FetchAllWhere(a => a.BoolProp == true && a.BoolProp != false);
-                //proxy.FetchAllWhere(a => a.IntProp == 1);
-                //proxy.FetchAllWhere(a => a.LongProp == 1);
-                //proxy.FetchAllWhere(a => a.DecimalProp == 1);
-                //proxy.FetchAllWhere(a => a.StringProp == "");
-                //proxy.FetchAllWhere(a => a.DateTimeOffsetProp == new DateTimeOffset());
-                //proxy.FetchAllWhere(a => a.GuidProp == Guid.Empty);
-                //proxy.FetchAllWhere(a => a.StringProp == null);
-                //proxy.FetchAllWhere(a => a.StringProp == "");
-                //proxy.FetchAllWhere(a => a.DateTimeOffsetProp == DateTimeOffset.Now);
-                //proxy.FetchAllWhere(a => a.Enum1 == Enum1.Enum1Value1);
-                //proxy.FetchAllWhere(a => a.Enum1 == Enum1.Enum1Value1 && a.DateTimeOffsetProp == DateTimeOffset.Now);
-                //proxy.FetchAllWhere(a => a.ByteArrayProp == new byte[0]);
-                //proxy.FetchAllWhere(a => a.ByteArrayProp == new byte[0] || a.GuidProp == Guid.Empty);
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.Enum1 == Enum1.Enum1Value1));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.Enum1 != Enum1.Enum1Value1));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.BoolProp));
+                //Console.WriteLine(proxy.FetchAllWhere(a => !a.BoolProp));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.BoolProp == false && a.GuidProp == Guid.Empty));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.DateTimeOffsetProp == new DateTimeOffset()));
+
+                //Console.WriteLine(proxy.FetchAllWhere(a => !a.BoolProp));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.BoolProp && a.BoolProp));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.BoolProp || a.BoolProp));
+                //Console.WriteLine(proxy.FetchAllWhere(a => !a.BoolProp && !a.BoolProp));
+                //Console.WriteLine(proxy.FetchAllWhere(a => !a.BoolProp && a.BoolProp));
+                //Console.WriteLine(proxy.FetchAllWhere(a => !a.BoolProp || !a.BoolProp));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.BoolProp || !a.BoolProp));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.BoolProp == true));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.BoolProp != false));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.BoolProp == true && a.BoolProp != false));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.IntProp == 1));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.LongProp == 1));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.DecimalProp == 1));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.StringProp == ""));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.DateTimeOffsetProp == new DateTimeOffset()));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.GuidProp == Guid.Empty));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.StringProp == null));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.StringProp == ""));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.DateTimeOffsetProp == DateTimeOffset.Now));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.Enum1 == Enum1.Enum1Value1));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.Enum1 == Enum1.Enum1Value1 && a.DateTimeOffsetProp == DateTimeOffset.Now));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.ByteArrayProp == new byte[0]));
+                //Console.WriteLine(proxy.FetchAllWhere(a => a.ByteArrayProp == new byte[0] || a.GuidProp == Guid.Empty));
 
 
                 key = Console.ReadKey().Key.ToString();
