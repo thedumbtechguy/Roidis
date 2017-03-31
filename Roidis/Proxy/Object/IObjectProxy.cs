@@ -10,7 +10,7 @@ namespace Roidis.Proxy.Object
     public interface IObjectProxy<T> where T : new()
     {
         IObservable<T> FetchAll();
-        IObservable<T> FetchAllWhere<TProperty>(Expression<Func<T, TProperty>> expression);
+        IObservable<T> FetchAllWhere(Expression<Func<T, bool>> expression);
         Task<T> Fetch(RedisValue id);
 
         Task<T> Fetch(string id);
