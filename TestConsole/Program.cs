@@ -115,11 +115,14 @@ namespace TestConsole
             Console.WriteLine(".");
 
             Console.WriteLine("Male Ids: ");
-            proxy.FetchAllWhere(a => a.Sex == "male").Subscribe(item => Console.Write(item.Id));
+            var male = new { m = "male" };
+            proxy.FetchAllWhere(a => a.Sex == male.m).Subscribe(item => Console.Write(item.Id));
+            Console.ReadLine();
             Console.WriteLine(".");
 
             Console.WriteLine("Female Ids: ");
             proxy.FetchAllWhere(a => a.Sex == "female").Subscribe(item => Console.Write(item.Id));
+            Console.ReadLine();
             Console.WriteLine(".");
             Console.WriteLine("=============");
 

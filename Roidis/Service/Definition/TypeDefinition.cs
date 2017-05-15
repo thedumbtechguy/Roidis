@@ -1,21 +1,14 @@
 ﻿using FastMember;
-using Roidis.Attribute;
 using Roidis.Exception;
 using Roidis.Service.Converter;
-using StackExchange.Redis;
-using System;
-using System.Collections;
 using System.Collections.Generic;
+using System;
 using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Roidis.Service.Definition
 {
     public class TypeDefinition<T> : ITypeDefinition<T>
     {
-
         public string Name { get; private set; }
         public Member PrimaryKey { get; private set; }
         public TypeAccessor Accessor { get; private set; }
@@ -25,7 +18,7 @@ namespace Roidis.Service.Definition
 
         private readonly List<Member> _indexedfields = new List<Member>();
         public List<Member> IndexedFields => _indexedfields;
-        
+
         private readonly List<Member> _requiredfields = new List<Member>();
         public List<Member> RequiredFields => _requiredfields;
 
@@ -51,7 +44,7 @@ namespace Roidis.Service.Definition
             return MemberToStorageNameMap[member.Name];
         }
 
-        public string GetIndexName(Member member)
+        public string GetIndexNameFromMember(Member member)
         {
             return MemberToIndexNameMap[member.Name];
         }

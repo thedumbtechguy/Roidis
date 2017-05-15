@@ -1,9 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using StackExchange.Redis;
+﻿using FastMember;
 using Roidis.Service.Definition;
-using FastMember;
+using StackExchange.Redis;
 
 namespace Roidis.Service.KeyGenerator
 {
@@ -21,7 +18,7 @@ namespace Roidis.Service.KeyGenerator
 
         public RedisKey GetFieldIndexKey<T>(ITypeDefinition<T> definition, Member member, RedisValue value)
         {
-            var indexName = definition.GetIndexName(member);
+            var indexName = definition.GetIndexNameFromMember(member);
             return $"#:#roidis:#user:#index:#field:{definition.Name}:{indexName}:{value}";
         }
 

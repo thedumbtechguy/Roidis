@@ -1,8 +1,5 @@
 ﻿using FastMember;
-using Roidis.Exception;
-using Roidis.Proxy;
 using Roidis.Proxy.Object;
-using Roidis.Service;
 using Roidis.Service.Converter;
 using Roidis.Service.Definition;
 using Roidis.Service.Indexer;
@@ -12,11 +9,6 @@ using Roidis.Service.Parser;
 using StackExchange.Redis;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Roidis
 {
@@ -30,7 +22,7 @@ namespace Roidis
         private readonly ITypeIndexer _indexer;
         private readonly ITypeDefinitionFactory _typeDefinitionFactory;
         private readonly IExpressionParser _expressionParser;
-        
+
         public Roid(IConnectionMultiplexer connection)
         {
             _connection = connection;
@@ -56,7 +48,7 @@ namespace Roidis
             if (!_definitionCache.ContainsKey(type))
                 _definitionCache[type] = _typeDefinitionFactory.Create<T>(TypeAccessor.Create(type));
 
-            return (ITypeDefinition<T>) _definitionCache[type];
+            return (ITypeDefinition<T>)_definitionCache[type];
         }
     }
 }

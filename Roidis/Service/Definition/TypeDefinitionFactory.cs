@@ -2,14 +2,10 @@
 using Roidis.Attribute;
 using Roidis.Exception;
 using Roidis.Service.Converter;
-using StackExchange.Redis;
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Roidis.Service.Definition
 {
@@ -25,15 +21,15 @@ namespace Roidis.Service.Definition
         public ITypeDefinition<T> Create<T>(TypeAccessor accessor)
         {
             var idFromName = false;
-            var type = typeof(T);        
+            var type = typeof(T);
             var definition = new TypeDefinition<T>(GetPrefix(type), accessor, valueConverter);
 
-            PropertyInfo[] props = type.GetProperties(BindingFlags.Instance|BindingFlags.Public);
+            PropertyInfo[] props = type.GetProperties(BindingFlags.Instance | BindingFlags.Public);
             foreach (PropertyInfo prop in props)
             {
                 // identify collections
                 var isCollection = prop.PropertyType != typeof(byte[]) && prop.PropertyType != typeof(string) && prop.PropertyType.GetInterfaces().Contains(typeof(IEnumerable));
-                
+
                 var member = accessor.GetMembers().First(m => m.Name == prop.Name);
                 var memberName = member.Name;
 
@@ -107,7 +103,6 @@ namespace Roidis.Service.Definition
 
             return definition;
         }
-
 
         private static string GetIndexName(RoidIndexAttribute indexAttribute, Member member)
         {

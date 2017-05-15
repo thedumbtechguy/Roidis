@@ -1,14 +1,5 @@
 ﻿using FastMember;
-using Roidis.Attribute;
-using Roidis.Exception;
-using StackExchange.Redis;
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Roidis.Service.Definition
 {
@@ -62,10 +53,10 @@ namespace Roidis.Service.Definition
         string GetHashName(Member member);
 
         /// <summary>
-        /// Get the name used to create the index key for this member 
+        /// Get the name used to create the index key for this member
         /// </summary>
         /// <param name="member"></param>
         /// <returns></returns>
-        string GetIndexName(Member member);
+        string GetIndexNameFromMember(Member member);
     }
 }

@@ -2,10 +2,8 @@
 using Roidis.Service.Converter;
 using Roidis.Service.Definition;
 using StackExchange.Redis;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 
 namespace Roidis.Service.Mapper
 {
@@ -20,24 +18,26 @@ namespace Roidis.Service.Mapper
 
         public List<HashEntry> HashFor<T>(ITypeDefinition<T> definition, T instance, bool isNew, HashEntry[] existingRecord)
         {
-            var list = new List<HashEntry>();
+            // make a check for indexed fields that are ignored
+
+            var changedList = new List<HashEntry>();
 
             foreach (var field in definition.AllFields)
             {
                 if (isNew && definition.IgnoreOnCreateFields.Any(f => f.Name == field.Name)) continue;
                 else if (!isNew && definition.IgnoreOnUpdateFields.Any(f => f.Name == field.Name)) continue;
-
+                
                 var value = definition.Accessor[instance, field.Name];
                 var redisValue = _redisValueConverter.FromObject(value, field.Type);
 
                 if (definition.RequiredFields.Any(f => f.Name == field.Name) && !redisValue.HasValue)
-                    throw new MemberRequiredException(field);
+                    throw new FieldRequiredException(field);
 
-                if (redisValue != existingRecord.FirstOrDefault(h => h.Name == field.Name).Value)
-                    list.Add(new HashEntry(definition.GetHashName(field), redisValue));
+                if (definition.IndexedFields.Contains(field) || redisValue != existingRecord.FirstOrDefault(h => h.Name == field.Name).Value)
+                    changedList.Add(new HashEntry(definition.GetHashName(field), redisValue));
             }
 
-            return list;
+            return changedList;
         }
 
         public T InstanceFor<T>(ITypeDefinition<T> definition, HashEntry[] hash) where T : new()

@@ -1,9 +1,4 @@
-﻿using Roidis.Exception;
-using System;
-using System.Collections.Generic;
-using System.Linq.Expressions;
-using System.Reflection;
-using System.Text;
+﻿using System;
 
 namespace Roidis.Service.Parser
 {
@@ -11,7 +6,7 @@ namespace Roidis.Service.Parser
     {
         public string OperandName { get; set; }
 
-        public FilterOperator Operator { get; set; } 
+        public FilterOperator Operator { get; set; }
 
         public Type RightType { get; set; }
         public object RightValue { get; set; }

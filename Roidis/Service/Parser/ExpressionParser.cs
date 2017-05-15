@@ -1,13 +1,11 @@
 ﻿using Roidis.Exception;
 using System;
-using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Text;
 
 namespace Roidis.Service.Parser
 {
-    public class  ExpressionParser: IExpressionParser
+    public class ExpressionParser : IExpressionParser
     {
         public IFilterExpression ParseFilter<T>(Expression<Func<T, bool>> expression)
         {
@@ -136,6 +134,5 @@ namespace Roidis.Service.Parser
         {
             return GetMemberExpression(expr).Member.Name;
         }
-
     }
 }

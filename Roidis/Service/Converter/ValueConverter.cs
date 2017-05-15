@@ -2,10 +2,8 @@
 using Roidis.Service.Definition;
 using StackExchange.Redis;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 
 namespace Roidis.Service.Converter
 {
@@ -37,36 +35,31 @@ namespace Roidis.Service.Converter
 
         private static DateTime Epoch = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
 
-
-
         public RedisValue FromObject(object sourceValue, Type sourceType)
         {
             if (sourceType == null)
                 throw new ArgumentNullException(nameof(sourceType));
-            else if(!IsMemberTypeSupported(sourceType))
+            else if (!IsMemberTypeSupported(sourceType))
                 throw new UnsupportedMemberTypeException(sourceType);
 
             if (sourceValue == null)
                 return RedisValue.EmptyString;
-            
+
             #region special cases
 
             if (sourceType == typeof(Guid) || sourceType == typeof(Guid?))
                 return sourceValue.ToString();
 
-
             if (sourceType == typeof(DateTime) || sourceType == typeof(DateTime?))
                 return (((DateTime)sourceValue).ToUniversalTime() - Epoch).TotalMilliseconds;
-
 
             if (sourceType == typeof(DateTimeOffset) || sourceType == typeof(DateTimeOffset?))
                 return ((DateTimeOffset)sourceValue).ToUnixTimeMilliseconds();
 
-
             if (sourceType.GetTypeInfo().IsEnum)
                 return Convert.ToString(sourceValue);
 
-            #endregion
+            #endregion special cases
 
             #region boxed and primitives
 
@@ -91,9 +84,9 @@ namespace Roidis.Service.Converter
             if (sourceType == typeof(string))
                 return (string)sourceValue;
 
-            #endregion
+            #endregion boxed and primitives
 
-            return (RedisValue) sourceValue;
+            return (RedisValue)sourceValue;
         }
 
         public object ToObject(RedisValue source, Type targetType)
@@ -104,46 +97,41 @@ namespace Roidis.Service.Converter
             #region special cases
 
             if (targetType == typeof(Guid))
-                return !source.HasValue 
-                    ? Guid.Empty 
+                return !source.HasValue
+                    ? Guid.Empty
                     : Guid.Parse(source);
 
             if (targetType == typeof(Guid?))
-                return !source.HasValue 
-                    ? (Guid?)null 
+                return !source.HasValue
+                    ? (Guid?)null
                     : Guid.Parse(source);
 
-
             if (targetType == typeof(DateTime))
-                return !source.HasValue 
-                    ? DateTime.Now 
+                return !source.HasValue
+                    ? DateTime.Now
                     : Epoch.AddMilliseconds((double)source);
-
 
             if (targetType == typeof(DateTime?))
-                return !source.HasValue 
-                    ? (DateTime?)null 
+                return !source.HasValue
+                    ? (DateTime?)null
                     : Epoch.AddMilliseconds((double)source);
-
 
             if (targetType == typeof(DateTimeOffset))
                 return !source.HasValue
                     ? DateTimeOffset.Now
                     : DateTimeOffset.FromUnixTimeMilliseconds((long)source);
 
-
             if (targetType == typeof(DateTimeOffset?))
                 return !source.HasValue
                     ? (DateTimeOffset?)null
                     : DateTimeOffset.FromUnixTimeMilliseconds((long)source);
-
 
             if (targetType.GetTypeInfo().IsEnum)
                 return !source.HasValue
                     ? Activator.CreateInstance(targetType)
                     : Enum.Parse(targetType, source);
 
-            #endregion
+            #endregion special cases
 
             #region nullables
 
@@ -154,14 +142,14 @@ namespace Roidis.Service.Converter
                 targetType = Nullable.GetUnderlyingType(targetType);
             }
 
-            #endregion
-            
+            #endregion nullables
+
             // this should handle all other stuff
             var newValue = Convert.ChangeType(source, targetType);
 
             // if it is still a RedisValue, the conversion failed
             if (newValue is RedisValue)
-                throw new ConversionFailedException(source, targetType);            
+                throw new ConversionFailedException(source, targetType);
 
             return newValue;
         }
@@ -184,17 +172,14 @@ namespace Roidis.Service.Converter
                     return Convert.ToInt32(id) == 0
                         ? UNDEFINED
                         : Tuple.Create((RedisValue)(int)id, true);
-
                 else if (idType == typeof(long))
                     return Convert.ToInt64(id) == 0
                         ? UNDEFINED
                         : Tuple.Create((RedisValue)Convert.ToString(id), true);
-
                 else if (idType == typeof(byte[]))
                     return id == null || ((byte[])id).Length == 0
                         ? UNDEFINED
                         : Tuple.Create((RedisValue)(byte[])id, true);
-
                 else if (idType == typeof(Guid))
                     return (Guid)id == Guid.Empty
                         ? Tuple.Create((RedisValue)Guid.NewGuid().ToString(), false)
@@ -205,9 +190,6 @@ namespace Roidis.Service.Converter
                     : Tuple.Create((RedisValue)(string)id, true);
             }
         }
-
-        
-
 
         public bool IsPrimaryKeyTypeSupported(Type type)
         {

@@ -4,16 +4,14 @@ using Roidis.Service.Definition;
 using Roidis.Service.Indexer;
 using Roidis.Service.KeyGenerator;
 using Roidis.Service.Mapper;
-using StackExchange.Redis;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System;
-using System.Reactive.Linq;
-using System.Linq.Expressions;
-using System.Reflection;
 using Roidis.Service.Parser;
+using StackExchange.Redis;
+using System;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Reactive.Linq;
+using System.Reflection;
+using System.Threading.Tasks;
 
 namespace Roidis.Proxy.Object
 {
@@ -38,7 +36,6 @@ namespace Roidis.Proxy.Object
             _typeDefinition = typeDefinition;
             _parser = parser;
         }
-
 
         public async Task<T> Save(T instance, bool saveChangedOnly = true)
         {
@@ -94,7 +91,6 @@ namespace Roidis.Proxy.Object
                 }
             }
 
-
             bool isNew = serial != -1;
             var hash = _mapper.HashFor(_typeDefinition, instance, isNew, existingRecord);
 
@@ -119,13 +115,12 @@ namespace Roidis.Proxy.Object
 
 #pragma warning restore CS4014
 
-
             if (!await txn.ExecuteAsync().ConfigureAwait(false))
             {
                 throw new RoidException("Failed to commit the transaction");
             }
 
-            #endregion
+            #endregion save to redis
 
             return instance;
         }
@@ -134,9 +129,22 @@ namespace Roidis.Proxy.Object
         {
             var key = _storageKeyGenerator.GetKey(_typeDefinition, id);
 
-            return await FetchInternal(key);
+            return await FetchInternal(key).ConfigureAwait(false);
         }
 
+        public async Task<string> AppendTo<TProperty>(RedisValue id, Expression<Func<T, TProperty>> expression, RedisValue appendValue)
+        {
+            var propertyName = _parser.GetPropertyName(expression);
+
+            var key = _storageKeyGenerator.GetKey(_typeDefinition, id);
+
+            var current = await _database.HashGetAsync(key, propertyName).ConfigureAwait(false);
+            current = $"{current}{appendValue}";
+
+            await _database.HashSetAsync(key, propertyName, current).ConfigureAwait(false);
+
+            return current;
+        }
 
         public async Task<long> Increment<TProperty>(RedisValue id, Expression<Func<T, TProperty>> expression, long incrementBy = 1)
         {
@@ -144,7 +152,7 @@ namespace Roidis.Proxy.Object
 
             var propertyName = _parser.GetPropertyName(expression);
 
-            return await _database.HashIncrementAsync(key, propertyName, incrementBy);
+            return await _database.HashIncrementAsync(key, propertyName, incrementBy).ConfigureAwait(false);
         }
 
         public async Task<long> Decrement<TProperty>(RedisValue id, Expression<Func<T, TProperty>> expression, long decrementBy = 1)
@@ -153,9 +161,15 @@ namespace Roidis.Proxy.Object
 
             var propertyName = _parser.GetPropertyName(expression);
 
-            return await _database.HashDecrementAsync(key, propertyName, decrementBy);
+            return await _database.HashDecrementAsync(key, propertyName, decrementBy).ConfigureAwait(false);
         }
 
+        public async Task<bool> Exists(RedisValue id)
+        {
+            var key = _storageKeyGenerator.GetKey(_typeDefinition, id);
+
+            return await _database.KeyExistsAsync(key).ConfigureAwait(false);
+        }
 
         public IObservable<T> FetchAll()
         {
@@ -188,7 +202,6 @@ namespace Roidis.Proxy.Object
                     await FetchAllInternal(keys, obs);
                 });
         }
-   
 
         public async Task<long> CountAll()
         {
@@ -209,8 +222,10 @@ namespace Roidis.Proxy.Object
                 return (await _database.SetCombineAsync(operation, indexes[0], indexes[1]).ConfigureAwait(false)).LongCount();
         }
 
+        public IDatabase GetDatabase() => _database;
 
         #region collapsed
+
         //private SetOperation ParseFilterExpression(Expression expression, List<RedisKey> indexes, int logicDepth, RedisValue propVal, Type propType, SetOperation operation)
         //{
         //    if(logicDepth > 2)
@@ -300,7 +315,6 @@ namespace Roidis.Proxy.Object
         //            throw new InvalidFilterExpression($"Unsupported operation: '{comparison.NodeType}'.");
         //        }
 
-
         //        switch (comparison.NodeType)
         //        {
         //            case ExpressionType.AndAlso:
@@ -329,8 +343,8 @@ namespace Roidis.Proxy.Object
         //        throw new InvalidFilterExpression($"Unsupported expression: '{expression}'.");
         //    }
         //}
-        #endregion
 
+        #endregion collapsed
 
         #region fetch variants
 
@@ -359,8 +373,7 @@ namespace Roidis.Proxy.Object
             return await Fetch((RedisValue)id.ToString()).ConfigureAwait(false);
         }
 
-        #endregion
-
+        #endregion fetch variants
 
         #region internals
 
@@ -432,6 +445,6 @@ namespace Roidis.Proxy.Object
             return _mapper.InstanceFor<T>(_typeDefinition, hash);
         }
 
-        #endregion
+        #endregion internals
     }
 }

@@ -1,9 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using StackExchange.Redis;
+﻿using FastMember;
 using Roidis.Service.Definition;
-using FastMember;
+using StackExchange.Redis;
 
 namespace Roidis.Service.KeyGenerator
 {

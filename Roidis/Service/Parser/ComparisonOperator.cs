@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Roidis.Service.Parser
+﻿namespace Roidis.Service.Parser
 {
     public enum ComparisonOperator
     {
