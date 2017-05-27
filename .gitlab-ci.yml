@@ -10,10 +10,18 @@ build:
   - 'dotnet build'
  only:
    - master
-deploy_myget:
+deploy_prerelease:
  stage: deploy
  script:
-  - 'dotnet pack Roidis/Roidis.csproj -c Release -o nupkgs --include-symbols'
+  - 'dotnet pack Roidis/Roidis.csproj -c Release -o nupkgs --include-symbols --version-suffix "-$CI_COMMIT_SHA"'
+  - 'dotnet nuget push Roidis/nupkgs/ -k $WITS_MYGET_TOKEN -s https://www.myget.org/F/wits/api/v2/package'
+ only:
+   - master
+deploy_stable:
+ stage: deploy
+ script:
+  - 'dotnet pack /p:PackageVersion=$CI_COMMIT_TAG Roidis/Roidis.csproj -c Release -o nupkgs --include-symbols'
   - 'dotnet nuget push Roidis/nupkgs/ -k $WITS_MYGET_TOKEN -s https://www.myget.org/F/wits/api/v2/package'
  only:
    - tags
+  
