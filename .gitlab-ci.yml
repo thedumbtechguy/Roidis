@@ -1,11 +1,20 @@
 image : microsoft/dotnet:latest
 stages:
   - build
+  - deploy
 before_script:
   - 'dotnet restore'
 build:
  stage: build
  script:
   - 'dotnet build'
+ only:
+   - master
+deploy_myget:
+ stage: deploy
+ script:
+  - 'dotnet pack Roidis/Roidis.csproj -c Release -o nupkgs --include-symbols'
+  - 'dotnet nuget push Roidis/nupkgs/ -k $WITS_MYGET_TOKEN -s https://www.myget.org/F/wits/api/v2/package'
+ when: manual
  only:
    - master

@@ -3,8 +3,8 @@
   <PropertyGroup>
     <TargetFramework>netstandard1.5</TargetFramework>
 
-    <PackageId>Roidis</PackageId>
-    <PackageVersion>0.3.1</PackageVersion>
+    <PackageId>WITS.Roidis</PackageId>
+    <PackageVersion>0.3.2</PackageVersion>
     <Authors>Froelich Stefan</Authors>
     <Description>Redis on Steroids (Roidis) is an object hash mapper built on top of redis.</Description>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
@@ -12,8 +12,12 @@
       Added a method for appending to a hash value.
       Added a means to retrieve the underlying database from a proxy.
     </PackageReleaseNotes>
-    <Copyright>Copyright 2016 (c) Stefan Froelich. All rights reserved.</Copyright>
-    <PackageTags>redis database orm</PackageTags>    
+    <Copyright>Copyright 2017 (c) Working IT Solutions. All rights reserved.</Copyright>
+    <PackageTags>redis database orm</PackageTags>
+    <RepositoryUrl>git@gitlab.com:wits-dev/roidis.git</RepositoryUrl>
+    <PackageProjectUrl>https://gitlab.com/wits-dev/roidis</PackageProjectUrl>
+    <RepositoryType>git</RepositoryType>
+    <Company>Working IT Solutions</Company>
   </PropertyGroup>
 
   <ItemGroup>
